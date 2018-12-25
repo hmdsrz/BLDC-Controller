@@ -51,7 +51,8 @@
 
 
 
-#define TIME 0.002
+#define PERIOD 0.01
+#define FRAME_RATE 1/PERIOD
 
 // variables for the pid function that is actually not a function 
 #define  PULSE_PER_ROUND 360
@@ -98,8 +99,8 @@ int PWM,M_PWM,SP_PWM;
 uint32_t start=0;
 float Battery;
 float value;
-char buffer1[11];
-
+char buffer1[10];
+char buffer2[8];
 
 // refernce and pid related constants
 float Input_Speed = 0;
@@ -120,8 +121,8 @@ float Last_RPM_EN1,
 
 
 float KP=2,
-			KI=60,
-			KD=0.1,
+			KI=20,
+			KD=0.05,
 			lambda = 0.997,
 			MaxIntegral = 5000;
 			
@@ -161,7 +162,7 @@ bool PB_UPKey(void);
 bool PB_DOWNKey(void);
 bool PB_BACKKey(void);
 bool PB_ENTERKey(void);		
-void OLED_Preview(int PWM);
+void OLED_Preview(float PWM);
 void Set_PWM (int M1_PWM,int M2_PWM,int M3_PWM,int M4_PWM,int SP_PWM);
 float Filter_Encoder_Data(float enc_data , float coeff , float last_filter);
 
@@ -176,11 +177,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim->Instance == TIM6)  //10ms
 	{
 
-//		rpm = ((float)((read_cnt-32768)/4) / PULSE_PER_ROUND) * ENCODER_READ_FRAME_RATE * SECONDE_TO_MINUTE;	
 			direction = __HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4);
 		
 		if(!direction)
-			EN1_RPM = (TIM4->CNT) - tmp; //* ENCODER_READ_FRAME_RATE * SECONDE_TO_MINUTE)/ 4 * PULSE_PER_ROUND;
+			EN1_RPM = (TIM4->CNT) - tmp; 
 		else 
 		{
 			EN1_RPM = tmp - (TIM4->CNT);
@@ -196,27 +196,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		Last_RPM_EN1=EN1_RPM;
 		EN1_RPM = Filter_Encoder_Data(EN1_RPM , 6 , Last_Filter_EN1);
 		Last_Filter_EN1 = EN1_RPM;
-//		else
-//			EN1_RPM = (TIM4->CNT - tmp
-//		EN1_RPM = TIM4->CNT;
-//		EN1_RPM = (((TIM4->CNT - 32768)*1000) * ENCODER_READ_FRAME_RATE * SECONDE_TO_MINUTE)/ 4 * PULSE_PER_ROUND;
-//		
+
 		if(EN1_RPM>6500) EN1_RPM=6500;	
 		if(EN1_RPM<-6500) EN1_RPM=-6500;
-//		
-//		__HAL_TIM_SetCounter(&htim4,32768);
+
 			tmp = TIM4->CNT;
-//		direction = __HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4);
+
 	}
 		
-	if(htim->Instance == TIM7) //2ms
+	if(htim->Instance == TIM7) //10ms
 	{
 			PID();	
 	}
 	
-	if(htim->Instance == TIM13) //500ms
+	if(htim->Instance == TIM13) //100ms
 	{
-		
+				Scan_Keys();	
 
 		
 	}
@@ -341,7 +336,7 @@ int main(void)
   while (1)
 	{
 //		Set_PWM(PWM,PWM,PWM,PWM,PWM);
-//	Scan_Keys();
+
 //			if(PB_UPKey())	
 //			{
 //			PWM+=10;
@@ -366,11 +361,14 @@ int main(void)
 //			OLED_Preview(PWM);
 ////			Set_PWM(PWM,PWM,PWM,PWM,PWM);	
 //			}
-//			sprintf(buffer1,"RPM=%4d",rpm);
-//			ssd1306_SetCursor(0,30);
-//			ssd1306_WriteString(buffer1,Font_11x18,White);
-//			ssd1306_UpdateScreen();	
-//			
+			sprintf(buffer1,"SPEED=%4.0f",Input_Speed);
+			ssd1306_SetCursor(0,0);
+			ssd1306_WriteString(buffer1,Font_11x18,White);
+			sprintf(buffer2,"RPM=%4.0f",EN1_RPM);
+			ssd1306_SetCursor(0,30);
+			ssd1306_WriteString(buffer2,Font_11x18,White);
+			ssd1306_UpdateScreen();	
+			
 				
 
 
@@ -827,9 +825,9 @@ static void MX_TIM7_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig;
 
   htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 215;
+  htim7.Init.Prescaler = 107;
   htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 999;
+  htim7.Init.Period = 9999;
   htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
   {
@@ -1078,7 +1076,7 @@ static void MX_TIM13_Init(void)
 {
 
   htim13.Instance = TIM13;
-  htim13.Init.Prescaler = 5399;
+  htim13.Init.Prescaler = 1079;
   htim13.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim13.Init.Period = 9999;
   htim13.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -1337,12 +1335,12 @@ void Set_PWM (int M1_PWM,int M2_PWM,int M3_PWM,int M4_PWM,int SP_PWM)
 //		  __HAL_TIM_SetCompare(&htim12,TIM_CHANNEL_2,M4_PWM+2500);  //M4
 //			__HAL_TIM_SetCompare(&htim2,TIM_CHANNEL_4,2*SP_PWM); 			//SP
 }	
-void OLED_Preview (int Value)
+void OLED_Preview (float Value)
 {			
-			char buffer[11];
-			sprintf(buffer,"SPEED = %4d",Value);
+			char buffer[14];
+			sprintf(buffer,"Desired = %4d",Value);
 			ssd1306_SetCursor(0,10);
-			ssd1306_WriteString(buffer,Font_11x18,White);
+			ssd1306_WriteString(buffer,Font_7x10,White);
 			ssd1306_UpdateScreen();
 }	
 
@@ -1351,7 +1349,7 @@ bool PB_UPKey(void)
 {
 	if(HAL_GPIO_ReadPin(UP_KEY_GPIO_Port,UP_KEY_Pin))
 	{
-	    HAL_Delay(1);
+//	    HAL_Delay(1);
 		if(HAL_GPIO_ReadPin(UP_KEY_GPIO_Port,UP_KEY_Pin))
 			return true;
 	}
@@ -1362,7 +1360,7 @@ bool PB_DOWNKey(void)
 {
 	if(HAL_GPIO_ReadPin(DOWN_KEY_GPIO_Port,DOWN_KEY_Pin))
 	{
-	    HAL_Delay(1);
+//	    HAL_Delay(1);
 		if(HAL_GPIO_ReadPin(DOWN_KEY_GPIO_Port,DOWN_KEY_Pin))
 			return true;
 	}
@@ -1373,7 +1371,7 @@ bool PB_ENTERKey(void)
 {
 	if(HAL_GPIO_ReadPin(ENTER_KEY_GPIO_Port,ENTER_KEY_Pin))
 	{
-	    HAL_Delay(1);
+//	    HAL_Delay(1);
 		if(HAL_GPIO_ReadPin(ENTER_KEY_GPIO_Port,ENTER_KEY_Pin))
 			return true;
 	}
@@ -1383,7 +1381,7 @@ bool PB_BACKKey(void)
 {
 	if(HAL_GPIO_ReadPin(BACK_KEY_GPIO_Port,BACK_KEY_Pin))
 	{
-	    HAL_Delay(1);
+//	    HAL_Delay(1);
 		if(HAL_GPIO_ReadPin(BACK_KEY_GPIO_Port,BACK_KEY_Pin))
 			return true;
 	}
@@ -1392,12 +1390,12 @@ bool PB_BACKKey(void)
 
 void PID(void)
 {			
-						 Error = Input_Speed - EN1_RPM;
+						Error = Input_Speed - EN1_RPM;
  		
-						DifferentialError = (Error - LastError) * 500;
-						//_DifferentialError = (_error - _LastError) * 100;
-						IntegralError = (IntegralError * lambda ) + (Error *  0.002);
-						//_IntegralError = (_IntegralError * PIDCoefficients.lambda ) + (_error *  0.006);
+						DifferentialError = (Error - LastError) * FRAME_RATE;
+						
+						IntegralError = (IntegralError * lambda ) + (Error *  PERIOD);
+						
 						if(IntegralError > MaxIntegral)
 						{
 						IntegralError = MaxIntegral;
@@ -1418,23 +1416,23 @@ void Scan_Keys(void)
 {
 			if(PB_UPKey())	
 			{
-			Input_Speed+=10;
-			if(Input_Speed > 2500)
-			Input_Speed = 2500;
-			OLED_Preview(Input_Speed);
+			Input_Speed+=100;
+			if(Input_Speed > 6500)
+			Input_Speed = 6500;
+//			OLED_Preview(Input_Speed);
 			}
 			if(PB_DOWNKey())	
 			{
-			Input_Speed-=10;
-			if(Input_Speed < 5)
+			Input_Speed-=100;
+			if(Input_Speed < 100)
 			Input_Speed = 0;
-			OLED_Preview(Input_Speed);
+//			OLED_Preview(Input_Speed);
 			}
 	
 			if(PB_BACKKey())	
 			{                                                                                                                                                                                                                                                                                                                           
 			Input_Speed = 0;
-			OLED_Preview(Input_Speed);
+//			OLED_Preview(Input_Speed);
 			}
 			
 		}
